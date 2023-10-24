@@ -8,6 +8,9 @@ from optparse import OptionParser
 
 port = None
 file_option = "default.txt"
+f_hostname = None
+f_port = None
+window = None
 
 def print_information(packet_type, current_time, sender_addr, sequence_number, length_of_packet, payload):
     if packet_type == "D":
@@ -135,12 +138,18 @@ def get_options():
     parser = OptionParser()
     parser.add_option('-p', dest='port', help='port is the port on which the requester waits for packets.', action='store', type='int')
     parser.add_option('-o', dest='fileoption', help='file option is the name of the file that is being requested.', action='store', type='string')
+    parser.add_option('-f', dest='f_hostname', help='the host name of the emulator', action='store', type='string')
+    parser.add_option('-e', dest='f_port', help='the port number of the emulator', action='store', type='int')
+    parser.add_option('-w', dest='window', help='the requesters window size', action='store', type='int')
 
     (options, args) = parser.parse_args()
 
-    global port, file_option
+    global port, file_option, f_hostname, f_port, window
     port = options.port
     file_option = options.fileoption
+    f_hostname = options.f_hostname
+    f_port = options.f_port
+    window = options.window
 
 def main():
     get_options()

@@ -10,6 +10,10 @@ reqport = None
 rate = 0
 seq_no = 0
 length = 0
+f_hostname = None
+f_port = None
+priority = None
+timeout = None
 
 def print_information(packet_type, current_time, sender_addr, sequence_number, length_of_packet, payload):
     if packet_type == "D":
@@ -132,15 +136,24 @@ def get_options():
     parser.add_option('-r', dest='rate', help='rate is the number of packets to be sent per second', action='store', type='int')
     parser.add_option('-q', dest='seq_no', help='seq_no is the initial sequence of the packet exchange', action='store', type='int')
     parser.add_option('-l', dest='length', help='length is the length of the payload (in bytes) in the packets', action='store', type='int')
+    parser.add_option('-f', dest='f_hostname', help='the host name of the emulator', action='store', type='string')
+    parser.add_option('-e', dest='f_port', help='the port of the emulator', action='store', type='int')
+    parser.add_option('-i', dest='priority', help='the priority of the sent packets', action='store', type='int')
+    parser.add_option('-t', dest='timeout', help='the timeout for retransmission for lost packets in the unit of milliseconds', action='store', type='int')
 
     (options, args) = parser.parse_args()
 
-    global port, reqport, rate, seq_no, length
+    global port, reqport, rate, seq_no, length, f_hostname, f_port, priority, timeout
     port = options.port
     reqport = options.reqport
     rate = options.rate
     seq_no = options.seq_no
     length = options.length
+    f_hostname = options.f_hostname
+    f_port = options.f_port
+    priority = options.priority
+    timeout = options.timeout
+
 
 def main():
     get_options()
