@@ -3,8 +3,14 @@ import struct
 import datetime
 from optparse import OptionParser
 
-### requester.py per write up,
-### The requester will receive these packets, subsequently write it to a file and print receipt information
+# TODO
+    # Modify the requester from Lab 1 to:
+        # The inner length field of the request packet will be filled with this window size so 
+        # that the sender can extract and use this value for sending.
+
+        # Verify that the destination IP address in the packet is indeed its own IP address
+
+        # Suppress display of individual DATA packet information.
 
 port = None
 file_option = "default.txt"

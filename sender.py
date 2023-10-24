@@ -5,6 +5,20 @@ import time
 from os.path import exists
 import datetime
 
+# TODO
+    # Modify the sender from Lab 1 to:
+        # Always start at sequence number 1
+
+        # Increment the sequence number by 1 for each packet sent, instead of by the packet length
+
+        # Print out the observed percentage of packets lost. The loss rate that the sender prints out is not necessarily 
+        # the same as the loss rate that we identify in the forwarding table since the sender might miss some ACKs. This 
+        # loss rate is computed by (number of retransmissions / total number of transmissions), where total number of 
+        # transmissions including both normal transmissions and retransmissions.
+
+        # The end packet is sent after ensuring that all data packets have been received by the receiver 
+        # (or if max number of retries have reached for sending all packets in the last window).
+
 port = None
 reqport = None
 rate = 0
