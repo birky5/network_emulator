@@ -73,6 +73,9 @@ def udp(sorted_and_parsed_tracker):
 
         sock.sendto(outer_header + inner_header, (f_hostname, f_port))
 
+    while True: # now we receive all the packets we are waiting on
+        full_packet, sender_addr = sock.recvfrom(1024)
+
 ### getting options from command line
 def get_options():
     parser = OptionParser()

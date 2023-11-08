@@ -74,12 +74,14 @@ def emulator(parsed_table):
                         match_found = True
                         break
             
-                print(match_found)
+                if not match_found:
+                    print("match not found, packet dropped")
+                    # log the packet drop
 
             ready = None # go back out and wait for more packets to arrive
 
         else:
-            print("waiting to do something...")
+            print("waiting for something to do...")
 
 
 ### getting options from command line

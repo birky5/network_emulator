@@ -84,11 +84,12 @@ def udp():
         unpacked_outer_header = struct.unpack("!BIHIHI", outer_header)
         unpacked_inner_header = struct.unpack("!cII", inner_header)
 
-
         print(unpacked_outer_header)
         print(unpacked_inner_header)
         print(payload)
         notEnd = False
+
+    # right now we are just receiving the packets, nothing else currently.
 
 ### getting options from command line
 def get_options():
