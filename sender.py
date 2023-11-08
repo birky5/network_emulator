@@ -77,70 +77,18 @@ def udp():
         full_packet, sender_addr = sock.recvfrom(1024) # buffer size is 1024 bytes
         current_time = datetime.datetime.now()
 
-        header = full_packet[:9]
-        payload = full_packet[9:]
+        outer_header = full_packet[:17]
+        inner_header = full_packet[17:26]
+        payload = full_packet[26:].decode()
 
-        header = struct.unpack("!cII", header)
-        packet_type = header[0].decode()
-        payload = payload.decode()
+        unpacked_outer_header = struct.unpack("!BIHIHI", outer_header)
+        unpacked_inner_header = struct.unpack("!cII", inner_header)
 
-        chunks_of_file = chunk_file(payload)
-        # print(1 / rate) # number of packets to send per second
 
-        # this for loop sends over the chunks of the file
-        for i in range(0,len(chunks_of_file)):
-            # time.sleep((rate / len(chunks_of_file)))
-            time.sleep(1 / rate)
-            # print(chunks_of_file[i])
-            packet = chunks_of_file[i].encode()
-            prev_seq_no = seq_no
-            seq_no += len(chunks_of_file[i])
-
-            # if length of the chunk is less than the length to send
-            # over in bytes, then we need to follow that last DATA
-            # packet with an END packet
-            if i == len(chunks_of_file) - 1:
-                # we need to send a data packet then an end packet
-                packet_type = b"D"
-                sequence_number = seq_no
-                length_of_packet = len(packet)
-
-                udp_header = struct.pack("!cII", packet_type, sequence_number, length_of_packet)
-                packet_with_header = udp_header + packet
-                sock.sendto(packet_with_header, sender_addr)
-                current_time = datetime.datetime.now()
-
-                print_information(packet_type.decode(), current_time, sender_addr, prev_seq_no, len(packet), packet)
-
-                # now the end packet
-                packet_type = b"E"
-                udp_header = struct.pack("!cII", packet_type, sequence_number, 0)
-                packet_with_header = udp_header + "".encode()
-                sock.sendto(packet_with_header, sender_addr)
-                current_time = datetime.datetime.now()
-
-                print_information(packet_type.decode(), current_time, sender_addr, seq_no, len(""), "")
-
-                notEnd = False
-            else:
-                # otherwise, just a DATA packet is sent
-                packet_type = b"D"
-                
-                sequence_number = seq_no
-                length_of_packet = len(packet)
-
-                udp_header = struct.pack("!cII", packet_type, sequence_number, length_of_packet)
-                packet_with_header = udp_header + packet
-
-                sock.sendto(packet_with_header, sender_addr)
-                current_time = datetime.datetime.now()
-
-                print_information(packet_type.decode(), current_time, sender_addr, prev_seq_no, len(packet), packet)
-
-            if len(chunks_of_file) < length:
-                notEnd = False
-        # we got the file name from the requester, now we need to 
-        # send the file to the requester in chunks
+        print(unpacked_outer_header)
+        print(unpacked_inner_header)
+        print(payload)
+        notEnd = False
 
 ### getting options from command line
 def get_options():

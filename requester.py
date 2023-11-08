@@ -1,6 +1,7 @@
 import socket
 import struct
 import datetime
+import ipaddress
 from optparse import OptionParser
 
 # TODO
@@ -47,97 +48,30 @@ def read_tracker_file_by_column():
 
     return tracker_file_lines
 
-def inet_ntop(af, addr):
-    # Convert an IP address in binary format to string format.
-
-    if af == socket.AF_INET:
-        return socket.inet_ntoa(addr)
-    elif af == socket.AF_INET6:
-        return socket.inet_ntop(af, addr)
-    else:
-        raise ValueError('Unknown address family: {}'.format(af))
-
 def udp(sorted_and_parsed_tracker):
-    ip_address = socket.gethostbyname(socket.gethostname())
+    source_addr = socket.gethostbyname(socket.gethostname()) # host where requester is running
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # sock.bind((UDP_IP, port))
-    sock.bind((ip_address, port))
+    sock.bind((source_addr, port))
 
-    for line in sorted_and_parsed_tracker:
-        line = line.split()
-        # print(line)
+    for line in sorted_and_parsed_tracker: # where we get each section of the file
+        line = line.split() # splits the line into a list
+        priority = 0x01 # 1 byte
+        source_port = port # 1 byte
+        dest_addr = int(ipaddress.ip_address(socket.gethostbyname(line[2])))
+        dest_port = int(line[3])
+        inner_length = 0
+        source_addr_int = int(ipaddress.ip_address(source_addr))
 
-        hostname = line[2]
-        ip_address = socket.gethostbyname(hostname)
+        outer_header = struct.pack("!BIHIHI", priority, source_addr_int, source_port, dest_addr, dest_port, inner_length)
 
-        receiver_addr = (ip_address, int(line[3]))
-        # table host names need to be the CSL machine you are currently on
+        packet_type = "R".encode()
+        sequence_number = 0
+        packet = file_option.encode()
 
-        packet = file_option # payload
-        if packet is not None:
-            packet = packet.encode()
+        inner_header = struct.pack("!cII", packet_type, sequence_number, len(packet)) + packet
 
-        packet_type = "R".encode() # packet type
-        sequence_number = 0 # seq number in network byte order
-        if packet is not None:
-            length = len(packet) # length of the payload
-        else:
-            length = 0
-
-        header = struct.pack("!cII", packet_type, sequence_number, length)
-        if packet is not None:
-            packet_with_header = header + packet
-        else:
-            packet_with_header = header
-
-        total_packets, total_packet_bytes = 0, 0
-        sender_address = None
-
-        # sender ip, and port that is waiting for the packets
-        sock.sendto(packet_with_header, receiver_addr)
-
-        print("--------------------")
-        print("Requester's print information:")
-        print()
-
-        start_time = datetime.datetime.now()
-        notEnd = True
-        while notEnd:
-            full_packet, sender_addr = sock.recvfrom(1024) # buffer size is 1024 bytes
-            current_time = datetime.datetime.now()
-
-            udp_header = full_packet[:9]
-            data = full_packet[9:]
-
-            udp_header = struct.unpack("!cII", udp_header)
-            packet_type = udp_header[0].decode()
-
-            if packet_type == "D":
-                total_packets += 1
-                total_packet_bytes += udp_header[2]
-                sender_address = sender_addr
-
-            print_information(packet_type, current_time, sender_addr, udp_header[1], udp_header[2], data)
-
-            # write to a new file of the same name we are asking for
-            with open(file_option, "a") as output_file:
-                output_file.write(data.decode())
-
-            if packet_type == "E":
-                notEnd = False
-        end_time = datetime.datetime.now()
-        elapsed_time = (end_time - start_time)
-        packets_per_second = total_packets / elapsed_time.total_seconds()
-
-        print()
-        print("Summary:")
-        if sender_address:
-            print("  sender address:             {0}:{1}".format(sender_address[0], sender_address[1]))
-        print("  Total DATA packets:         %s" % total_packets)
-        print("  Total DATA bytes:           %s" % total_packet_bytes)
-        print("  Average packets per second: %s" % packets_per_second)
-        print("  Duration of the test:       %s ms" % elapsed_time)
-        print()
+        sock.sendto(outer_header + inner_header, (f_hostname, f_port))
 
 ### getting options from command line
 def get_options():

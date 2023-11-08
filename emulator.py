@@ -1,7 +1,9 @@
 from optparse import OptionParser
+import ipaddress
 from queue import Queue
 import socket
 import select
+import struct
 
 port, queue_size, file_name, log = None, None, None, None
 
@@ -21,7 +23,7 @@ def read_static_forwarding_table():
 
     return table_lines
 
-def emulator():
+def emulator(parsed_table):
     low_queue = Queue(maxsize = queue_size)
     mid_queue = Queue(maxsize = queue_size)
     high_queue = Queue(maxsize = queue_size)
@@ -39,9 +41,45 @@ def emulator():
         if ready[0]: # if ready[0] is not empty, then there is a packet to be received
             data, addr = sock.recvfrom(1024)
             # the if statement is step #1 from 2.3 from the write up
+            # print(parsed_table)
+            ## for right now, just for the sake of being simple I am going to forward right to the sender
 
-            # step #2: once you receive a packet, decide whether is to be forwarded by consulting forwarding table
-            # step #3: queue packet according to pracket priority level if the queue is not full
+            unpacked_outer_header = struct.unpack("!BIHIHI", data[:17])
+
+            match_found = False
+
+            for line in parsed_table:
+                line = line.split()
+                forward_table_hostname = socket.gethostbyname(line[2])
+                forward_table_port = int(line[3])
+
+                packet_hostname = str(ipaddress.ip_address(unpacked_outer_header[3]))
+                packet_port = unpacked_outer_header[4]
+
+                # compare destination of incoming packet with destination in forwarding table to find a match
+                # if a match is found, then queue the packet, otherwise drop the packet and log it
+
+                if (forward_table_hostname == packet_hostname) and (forward_table_port == packet_port):
+                    print("match found, packet queued in queue number: ", unpacked_outer_header[0])
+                    if unpacked_outer_header[0] == 1:
+                        high_queue.put(data)
+                        match_found = True
+                        break
+                    elif unpacked_outer_header[0] == 2:
+                        mid_queue.put(data)
+                        match_found = True
+                        break
+                    elif unpacked_outer_header[0] == 3:
+                        low_queue.put(data)
+                        match_found = True
+                        break
+            
+                print(match_found)
+
+            ready = None # go back out and wait for more packets to arrive
+
+        else:
+            print("waiting to do something...")
 
 
 ### getting options from command line
@@ -68,6 +106,7 @@ def get_options():
 def main():
     get_options()
     parsed_table = read_static_forwarding_table()
+    emulator(parsed_table)
     
 if __name__ == "__main__":
     main()

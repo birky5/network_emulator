@@ -1,0 +1,1 @@
+hello.txt 1 royal-15 5000
