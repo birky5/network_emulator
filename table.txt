@@ -1,1 +1,4 @@
-royal-15 5003 royal-15 5000 royal-15 5000 0 0
+royal-15 6000 royal-15 4000 royal-15 3000 0 0
+royal-15 6000 royal-15 5000 royal-15 5000 0 0
+royal-15 3000 royal-15 4000 royal-15 4000 0 0
+royal-15 3000 royal-15 5000 royal-15 6000 0 0

@@ -16,7 +16,15 @@ def read_static_forwarding_table():
     table_lines = table.readlines()
     table.close()
 
-    table_lines = [x.strip() for x in table_lines if int(x.split()[1]) == port]
+    hostname = socket.gethostbyname(socket.gethostname())
+
+    #for line in table_lines:
+    #    new_line = line.split()
+    #    if int(new_line[1]) != port and socket.gethostbyname(new_line[0]) != hostname:
+    #        table_lines.remove(line)
+
+    table_lines = [x.strip() for x in table_lines if int(x.split()[1]) == port and socket.gethostbyname(x.split()[0]) == hostname]
+    print(table_lines)
 
     # remove all lines that where the "hostname port" pair doesn't have
     # a port that is equal to the port of the emulator we are running
@@ -82,6 +90,27 @@ def emulator(parsed_table):
 
         else:
             print("waiting for something to do...")
+
+            if not high_queue.empty():
+                print("high queue not empty, sending high packet")
+
+                data = high_queue.get()
+                unpacked_data = struct.unpack("!BIHIHI", data[:17])
+
+                # find line in the forwarding table that is on the emulator host and has same destination
+                # as the packet we are forwarding
+                forwarding = [x for x in parsed_table if (socket.gethostbyname(x.split()[2]) == str(ipaddress.ip_address(unpacked_data[3]))) and (int(x.split()[3]) == unpacked_data[4])]
+                nexthop = forwarding[0].split()
+                sock.sendto(data, (nexthop[4], int(nexthop[5])))
+                # print(forwarding)
+
+                ### TODO
+                    # add delay and possible packet loss
+
+            elif not mid_queue.empty() and high_queue.empty():
+                print("high queue empty but mid queue not empty, mid packet")
+            else:
+                print("high queue empty and mid queue empty, sending low packet")
 
 
 ### getting options from command line
