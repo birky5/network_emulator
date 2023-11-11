@@ -85,6 +85,9 @@ def udp():
         unpacked_outer_header = struct.unpack("!BIHIHI", outer_header)
         unpacked_inner_header = struct.unpack("!cII", inner_header)
 
+        window = unpacked_outer_header[5]
+        print(type(window))
+
         print(unpacked_outer_header)
         print(unpacked_inner_header)
         print(payload)
@@ -92,9 +95,9 @@ def udp():
         chunks_of_file = chunk_file(payload)
 
         sequence = 0
+        buffer = []
         for i in range(0, len(chunks_of_file)):
             time.sleep(1 / rate)
-            buffer = []
 
             packet_type = "D".encode()
             length_of_packet = len(chunks_of_file[i])
@@ -111,6 +114,13 @@ def udp():
             complete_packet = outer_header + inner_header_with_payload
 
             sock.sendto(complete_packet, (f_hostname, f_port))
+
+            buffer.append(complete_packet)
+
+            print(buffer)
+
+            if (len(buffer) == window):
+                print("buffer is full, waiting for ACKs")
 
             # right now not sending window sizes
 
