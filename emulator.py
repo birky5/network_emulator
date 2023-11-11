@@ -53,6 +53,7 @@ def emulator(parsed_table):
             ## for right now, just for the sake of being simple I am going to forward right to the sender
 
             unpacked_outer_header = struct.unpack("!BIHIHI", data[:17])
+            print(unpacked_outer_header)
 
             match_found = False
 
@@ -104,13 +105,11 @@ def emulator(parsed_table):
                 sock.sendto(data, (nexthop[4], int(nexthop[5])))
                 # print(forwarding)
 
-                ### TODO
-                    # add delay and possible packet loss
-
-            elif not mid_queue.empty() and high_queue.empty():
-                print("high queue empty but mid queue not empty, mid packet")
-            else:
-                print("high queue empty and mid queue empty, sending low packet")
+            #elif not mid_queue.empty() and high_queue.empty():
+                #print("high queue empty but mid queue not empty, mid packet")
+            #else:
+                nothing = 0
+                #print("high queue empty and mid queue empty, sending low packet")
 
 
 ### getting options from command line

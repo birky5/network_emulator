@@ -6,9 +6,6 @@ from optparse import OptionParser
 
 # TODO
     # Modify the requester from Lab 1 to:
-        # The inner length field of the request packet will be filled with this window size so 
-        # that the sender can extract and use this value for sending.
-
         # Verify that the destination IP address in the packet is indeed its own IP address
 
         # Suppress display of individual DATA packet information.
@@ -60,7 +57,7 @@ def udp(sorted_and_parsed_tracker):
         source_port = port # 1 byte
         dest_addr = int(ipaddress.ip_address(socket.gethostbyname(line[2])))
         dest_port = int(line[3])
-        inner_length = 0
+        inner_length = window
         source_addr_int = int(ipaddress.ip_address(source_addr))
 
         outer_header = struct.pack("!BIHIHI", priority, source_addr_int, source_port, dest_addr, dest_port, inner_length)
@@ -75,6 +72,17 @@ def udp(sorted_and_parsed_tracker):
 
     while True: # now we receive all the packets we are waiting on
         full_packet, sender_addr = sock.recvfrom(1024)
+
+        outer_header = full_packet[:17]
+        inner_header = full_packet[17:26]
+        payload = full_packet[26:].decode()
+
+        unpacked_outer_header = struct.unpack("!BIHIHI", outer_header)
+        unpacked_inner_header = struct.unpack("!cII", inner_header)
+
+        print(unpacked_outer_header)
+        print(unpacked_inner_header)
+        print(payload)
 
 ### getting options from command line
 def get_options():

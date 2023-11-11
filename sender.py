@@ -1,4 +1,5 @@
 from optparse import OptionParser
+import ipaddress
 import socket
 import struct
 import time
@@ -61,15 +62,15 @@ def chunk_file(file_name):
     return chunks
 
 def udp():
-    global port, reqport, rate, seq_no, length
-    ip_address = socket.gethostbyname(socket.gethostname())
+    global port, reqport, rate, seq_no, length, priority, f_hostname, f_port, timeout
+    source_addr = socket.gethostbyname(socket.gethostname())
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # sock.bind(("127.0.0.1", port))
 
-    sock.bind((ip_address, port))
+    sock.bind((source_addr, port))
     # print(socket.gethostbyname(socket.gethostname()))
 
-    receiver_addr = (ip_address, reqport) # For now, it is just an arbitary address
+    receiver_addr = (source_addr, reqport) # For now, it is just an arbitary address
     # sender ip, and port that is waiting for the packets
 
     notEnd = True
@@ -87,6 +88,32 @@ def udp():
         print(unpacked_outer_header)
         print(unpacked_inner_header)
         print(payload)
+
+        chunks_of_file = chunk_file(payload)
+
+        sequence = 0
+        for i in range(0, len(chunks_of_file)):
+            time.sleep(1 / rate)
+            buffer = []
+
+            packet_type = "D".encode()
+            length_of_packet = len(chunks_of_file[i])
+            inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + chunks_of_file[i].encode()
+
+            packet_priority = priority
+            source_port = port
+            source_addr_int = int(ipaddress.ip_address(source_addr))
+            dest_addr = unpacked_outer_header[1]
+            dest_port = unpacked_outer_header[2]
+
+            outer_header = struct.pack("!BIHIHI", packet_priority, source_addr_int, source_port, dest_addr, dest_port, length_of_packet)
+
+            complete_packet = outer_header + inner_header_with_payload
+
+            sock.sendto(complete_packet, (f_hostname, f_port))
+
+            # right now not sending window sizes
+
         notEnd = False
 
     # right now we are just receiving the packets, nothing else currently.
