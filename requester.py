@@ -72,6 +72,11 @@ def udp(sorted_and_parsed_tracker):
 
     notEnd = True
     buffer = {}
+
+    dictlist = [dict() for x in range(len(sorted_and_parsed_tracker))]
+    # now need to figure out how to choose if what index in the dict list
+    # to use for each packet
+
     while notEnd: # now we receive all the packets we are waiting on
         full_packet, sender_addr = sock.recvfrom(1024)
 
