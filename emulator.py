@@ -4,6 +4,9 @@ from queue import Queue
 import socket
 import select
 import struct
+import datetime
+import time
+import random
 
 port, queue_size, file_name, log = None, None, None, None
 
@@ -31,6 +34,16 @@ def read_static_forwarding_table():
 
     return table_lines
 
+def log_packet_loss(reason, source_hostname, source_port, dest_hostname, dest_port, time_of_loss, priority, size):
+    with open(log, "a") as log_file:
+        log_file.write("Reason: " + reason + "\n")
+        log_file.write("Source hostname and port: " + source_hostname + ":" + str(source_port) + "\n")
+        log_file.write("Destination hostname and port: " + dest_hostname + ":" + str(dest_port) + "\n")
+        log_file.write("Time of loss: " + time_of_loss + "\n")
+        log_file.write("Priority: " + str(priority) + "\n")
+        log_file.write("Size: " + str(size) + "\n")
+        log_file.write("\n")
+
 def emulator(parsed_table):
     low_queue = Queue(maxsize = queue_size)
     mid_queue = Queue(maxsize = queue_size)
@@ -53,7 +66,7 @@ def emulator(parsed_table):
             ## for right now, just for the sake of being simple I am going to forward right to the sender
 
             unpacked_outer_header = struct.unpack("!BIHIHI", data[:17])
-            print(unpacked_outer_header)
+            # print(unpacked_outer_header)
 
             match_found = False
 
@@ -65,27 +78,38 @@ def emulator(parsed_table):
                 packet_hostname = str(ipaddress.ip_address(unpacked_outer_header[3]))
                 packet_port = unpacked_outer_header[4]
 
+                source_hostname = str(ipaddress.ip_address(unpacked_outer_header[1]))
+                source_port = unpacked_outer_header[2]
+
                 # compare destination of incoming packet with destination in forwarding table to find a match
                 # if a match is found, then queue the packet, otherwise drop the packet and log it
 
                 if (forward_table_hostname == packet_hostname) and (forward_table_port == packet_port):
                     print("match found, packet queued in queue number: ", unpacked_outer_header[0])
                     if unpacked_outer_header[0] == 1:
-                        high_queue.put(data)
-                        match_found = True
-                        break
+                        if high_queue.full():
+                            log_packet_loss("High queue is full", source_hostname, source_port, packet_hostname, packet_port, str(datetime.datetime.now()), unpacked_outer_header[0], unpacked_outer_header[5])
+                        else:
+                            high_queue.put(data)
+                            match_found = True
+                            break
                     elif unpacked_outer_header[0] == 2:
-                        mid_queue.put(data)
-                        match_found = True
-                        break
+                        if mid_queue.full():
+                            log_packet_loss("Mid queue is full", source_hostname, source_port, packet_hostname, packet_port, str(datetime.datetime.now()), unpacked_outer_header[0], unpacked_outer_header[5])
+                        else:
+                            mid_queue.put(data)
+                            match_found = True
+                            break
                     elif unpacked_outer_header[0] == 3:
-                        low_queue.put(data)
-                        match_found = True
-                        break
+                        if low_queue.full():
+                            log_packet_loss("Low queue is full", source_hostname, source_port, packet_hostname, packet_port, str(datetime.datetime.now()), unpacked_outer_header[0], unpacked_outer_header[5])
+                        else:
+                            low_queue.put(data)
+                            match_found = True
+                            break
             
-                if not match_found:
-                    print("match not found, packet dropped")
-                    # log the packet drop
+            if not match_found:
+                log_packet_loss("No match found in forwarding table", source_hostname, source_port, packet_hostname, packet_port, str(datetime.datetime.now()), unpacked_outer_header[0], unpacked_outer_header[5])  
 
             ready = None # go back out and wait for more packets to arrive
 
@@ -93,24 +117,66 @@ def emulator(parsed_table):
             print("waiting for something to do...")
 
             if not high_queue.empty():
-                print("high queue not empty, sending high packet")
-
                 data = high_queue.get()
                 unpacked_data = struct.unpack("!BIHIHI", data[:17])
+                packet_type = struct.unpack("!cII", data[17:26])
+                # find line in the forwarding table that is on the emulator host and has same destination
+                # as the packet we are forwarding
+                forwarding = [x for x in parsed_table if (socket.gethostbyname(x.split()[2]) == str(ipaddress.ip_address(unpacked_data[3]))) and (int(x.split()[3]) == unpacked_data[4])]
+                nexthop = forwarding[0].split()
+
+                time.sleep(int(nexthop[6]) / 1000)
+
+                number = random.randint(1, 100)
+
+                if number <= int(nexthop[7]) and int(nexthop[7]) != 0 and packet_type[0].decode() != "E":
+                    # drop the packet
+                    log_packet_loss("Loss event occurred", str(ipaddress.ip_address(unpacked_data[1])), unpacked_data[2], str(ipaddress.ip_address(unpacked_data[3])), unpacked_data[4], str(datetime.datetime.now()), unpacked_data[0], unpacked_data[5])
+                else:
+                    sock.sendto(data, (nexthop[4], int(nexthop[5])))
+                # print(forwarding)
+
+            elif not mid_queue.empty() and high_queue.empty():
+                data = mid_queue.get()
+                unpacked_data = struct.unpack("!BIHIHI", data[:17])
+                packet_type = struct.unpack("!cII", data[17:26])
 
                 # find line in the forwarding table that is on the emulator host and has same destination
                 # as the packet we are forwarding
                 forwarding = [x for x in parsed_table if (socket.gethostbyname(x.split()[2]) == str(ipaddress.ip_address(unpacked_data[3]))) and (int(x.split()[3]) == unpacked_data[4])]
                 nexthop = forwarding[0].split()
-                sock.sendto(data, (nexthop[4], int(nexthop[5])))
+
+                time.sleep(int(nexthop[6]) / 1000)
+
+                number = random.randint(1, 100)
+
+                if number <= int(nexthop[7]) and int(nexthop[7]) != 0 and packet_type[0].decode() != "E":
+                    # drop the packet
+                    log_packet_loss("Loss event occurred", str(ipaddress.ip_address(unpacked_data[1])), unpacked_data[2], str(ipaddress.ip_address(unpacked_data[3])), unpacked_data[4], str(datetime.datetime.now()), unpacked_data[0], unpacked_data[5])
+                else:
+                    sock.sendto(data, (nexthop[4], int(nexthop[5])))
                 # print(forwarding)
 
-            #elif not mid_queue.empty() and high_queue.empty():
-                #print("high queue empty but mid queue not empty, mid packet")
-            #else:
-                nothing = 0
-                #print("high queue empty and mid queue empty, sending low packet")
+            elif not low_queue.empty() and mid_queue.empty() and high_queue.empty():
+                data = low_queue.get()
+                unpacked_data = struct.unpack("!BIHIHI", data[:17])
+                packet_type = struct.unpack("!cII", data[17:26])
 
+                # find line in the forwarding table that is on the emulator host and has same destination
+                # as the packet we are forwarding
+                forwarding = [x for x in parsed_table if (socket.gethostbyname(x.split()[2]) == str(ipaddress.ip_address(unpacked_data[3]))) and (int(x.split()[3]) == unpacked_data[4])]
+                nexthop = forwarding[0].split()
+
+                time.sleep(int(nexthop[6]) / 1000)
+
+                number = random.randint(1, 100)
+
+                if number <= int(nexthop[7]) and int(nexthop[7]) != 0 and packet_type[0].decode() != "E":
+                    # drop the packet
+                    log_packet_loss("Loss event occurred", str(ipaddress.ip_address(unpacked_data[1])), unpacked_data[2], str(ipaddress.ip_address(unpacked_data[3])), unpacked_data[4], str(datetime.datetime.now()), unpacked_data[0], unpacked_data[5])
+                else:
+                    sock.sendto(data, (nexthop[4], int(nexthop[5])))
+                # print(forwarding)
 
 ### getting options from command line
 def get_options():
