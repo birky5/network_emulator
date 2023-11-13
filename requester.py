@@ -71,6 +71,7 @@ def udp(sorted_and_parsed_tracker):
         sock.sendto(outer_header + inner_header, (f_hostname, f_port))
 
     notEnd = True
+    buffer = {}
     while notEnd: # now we receive all the packets we are waiting on
         full_packet, sender_addr = sock.recvfrom(1024)
 
@@ -81,18 +82,33 @@ def udp(sorted_and_parsed_tracker):
         unpacked_outer_header = struct.unpack("!BIHIHI", outer_header)
         unpacked_inner_header = struct.unpack("!cII", inner_header)
 
-        # Acknowledge all the packets I am receiving
-        packet_type = "A".encode()
-        sequence_number = unpacked_inner_header[1]
+        packet_type = unpacked_inner_header[0].decode()
 
-        ack_inner_header = struct.pack("!cII", packet_type, sequence_number, 0) + "".encode()
-        ack_outer_header = struct.pack("!BIHIHI", 0x01, unpacked_outer_header[3], unpacked_outer_header[4], unpacked_outer_header[1], unpacked_outer_header[2], 0)
+        dest_ip = str(ipaddress.ip_address(unpacked_outer_header[3]))
+        host_ip = socket.gethostbyname(socket.gethostname())
+        
+        if dest_ip == host_ip:
+            if packet_type == "E":
+                sorted_buffer = dict(sorted(buffer.items()))
 
-        sock.sendto(ack_outer_header + ack_inner_header, (f_hostname, f_port))
+                for key, value in sorted_buffer.items():
+                    with open("test.txt", "a") as f:
+                        f.write(value)
 
-        print(unpacked_outer_header)
-        print(unpacked_inner_header)
-        print(payload)
+                buffer.clear()
+            else:
+                buffer[unpacked_inner_header[1]] = payload
+                sorted_buffer = dict(sorted(buffer.items()))
+
+                # Acknowledge all the packets I am receiving
+                packet_type = "A".encode()
+                sequence_number = unpacked_inner_header[1]
+
+                ack_inner_header = struct.pack("!cII", packet_type, sequence_number, 0) + "".encode()
+                ack_outer_header = struct.pack("!BIHIHI", 0x01, unpacked_outer_header[3], unpacked_outer_header[4], unpacked_outer_header[1], unpacked_outer_header[2], 0)
+                sock.sendto(ack_outer_header + ack_inner_header, (f_hostname, f_port))
+
+
 
 ### getting options from command line
 def get_options():

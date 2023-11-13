@@ -93,62 +93,74 @@ def udp():
         print(payload)
 
         chunks_of_file = chunk_file(payload)
-
+        max_sequence_number = len(chunks_of_file) - 1
         sequence = 0
+
+        src_addr_int = int(ipaddress.ip_address(source_addr))
+        dest_addr = unpacked_outer_header[1]
+        dest_port = unpacked_outer_header[2]
+
         buffer = []
-        for i in range(0, len(chunks_of_file)):
-            time.sleep(1 / rate)
+        ack_received = {}
 
-            if i == len(chunks_of_file) - 1:
-                # send the normal data packet
+        while True:
+            for _ in range(window):
+                if sequence > max_sequence_number:
+                    break
+                time.sleep(1 / rate)
+                packet = chunks_of_file[sequence].encode()
+                length_of_packet = len(packet)
                 packet_type = "D".encode()
-                length_of_packet = len(chunks_of_file[i])
-                inner_header_with_payload = struct.pack("!cII", packet_type, i, length_of_packet) + chunks_of_file[i].encode()
-
-                packet_priority = priority
-                source_port = port
-                source_addr_int = int(ipaddress.ip_address(source_addr))
-                dest_addr = unpacked_outer_header[1]
-                dest_port = unpacked_outer_header[2]
-
-                outer_header = struct.pack("!BIHIHI", packet_priority, source_addr_int, source_port, dest_addr, dest_port, length_of_packet)
+                inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + packet
+                outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, length_of_packet)
 
                 complete_packet = outer_header + inner_header_with_payload
+                buffer.append(sequence)
+                ack_received[sequence] = False
+                sequence += 1
 
                 sock.sendto(complete_packet, (f_hostname, f_port))
 
-                buffer.append(complete_packet)
+            start_time = time.time()
+            while not all(ack_received[sequence] for sequence in buffer):
+                # TODO: NEED TO LOOK AT DROPPING PACKET AFTER MAX RETRANSMISSIONS !!!
+                current_time = time.time()
 
-                ## send the end packet
+                if current_time - start_time > timeout / 1000:
+                # while not all acknowledged
+                    for sequence in buffer:
+                        if not ack_received[sequence]:
+                            packet = chunks_of_file[sequence].encode()
+                            length_of_packet = len(packet)
+                            packet_type = "D".encode()
+                            inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + packet
+                            outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, length_of_packet)
+                            complete_packet = outer_header + inner_header_with_payload
+                            sock.sendto(complete_packet, (f_hostname, f_port))
+                    start_time = time.time()
+                
+                try:
+                    sock.settimeout(0.1)
+                    ack_packet, sender_addr = sock.recvfrom(1024)
+
+                    ack_inner_header = ack_packet[17:26]
+                    unpacked_ack_inner_header = struct.unpack("!cII", ack_inner_header)
+                    unpacked_sequence_number = unpacked_ack_inner_header[1]
+
+                    if unpacked_sequence_number in buffer:
+                        ack_received[unpacked_sequence_number] = True
+                        # print(ack_received)
+                except socket.timeout:
+                    pass
+
+            if sequence > max_sequence_number:
+                # send an end packet
                 packet_type = "E".encode()
-                end_inner_header_with_payload = struct.pack("!cII", packet_type, i + 1, 0) + "".encode()
-
-                complete_last_packet = outer_header + end_inner_header_with_payload
-                sock.sendto(complete_last_packet, (f_hostname, f_port))
-                buffer.append(complete_packet)
-
-            else:
-                # send the normal data packet
-                packet_type = "D".encode()
-                length_of_packet = len(chunks_of_file[i])
-                inner_header_with_payload = struct.pack("!cII", packet_type, i, length_of_packet) + chunks_of_file[i].encode()
-
-                packet_priority = priority
-                source_port = port
-                source_addr_int = int(ipaddress.ip_address(source_addr))
-                dest_addr = unpacked_outer_header[1]
-                dest_port = unpacked_outer_header[2]
-
-                outer_header = struct.pack("!BIHIHI", packet_priority, source_addr_int, source_port, dest_addr, dest_port, length_of_packet)
-
-                complete_packet = outer_header + inner_header_with_payload
-
+                end_inner_header_with_payload = struct.pack("!cII", packet_type, sequence, 0) + "".encode()
+                outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, 0)
+                complete_packet = outer_header + end_inner_header_with_payload
                 sock.sendto(complete_packet, (f_hostname, f_port))
-
-                buffer.append(complete_packet)
-
-            # right now not sending window sizes
-
+                break
         notEnd = False
 
     # right now we are just receiving the packets, nothing else currently.
