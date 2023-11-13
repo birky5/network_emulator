@@ -70,7 +70,8 @@ def udp(sorted_and_parsed_tracker):
 
         sock.sendto(outer_header + inner_header, (f_hostname, f_port))
 
-    while True: # now we receive all the packets we are waiting on
+    notEnd = True
+    while notEnd: # now we receive all the packets we are waiting on
         full_packet, sender_addr = sock.recvfrom(1024)
 
         outer_header = full_packet[:17]
@@ -79,6 +80,15 @@ def udp(sorted_and_parsed_tracker):
 
         unpacked_outer_header = struct.unpack("!BIHIHI", outer_header)
         unpacked_inner_header = struct.unpack("!cII", inner_header)
+
+        # Acknowledge all the packets I am receiving
+        packet_type = "A".encode()
+        sequence_number = unpacked_inner_header[1]
+
+        ack_inner_header = struct.pack("!cII", packet_type, sequence_number, 0) + "".encode()
+        ack_outer_header = struct.pack("!BIHIHI", 0x01, unpacked_outer_header[3], unpacked_outer_header[4], unpacked_outer_header[1], unpacked_outer_header[2], 0)
+
+        sock.sendto(ack_outer_header + ack_inner_header, (f_hostname, f_port))
 
         print(unpacked_outer_header)
         print(unpacked_inner_header)

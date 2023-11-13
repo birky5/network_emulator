@@ -99,28 +99,53 @@ def udp():
         for i in range(0, len(chunks_of_file)):
             time.sleep(1 / rate)
 
-            packet_type = "D".encode()
-            length_of_packet = len(chunks_of_file[i])
-            inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + chunks_of_file[i].encode()
+            if i == len(chunks_of_file) - 1:
+                # send the normal data packet
+                packet_type = "D".encode()
+                length_of_packet = len(chunks_of_file[i])
+                inner_header_with_payload = struct.pack("!cII", packet_type, i, length_of_packet) + chunks_of_file[i].encode()
 
-            packet_priority = priority
-            source_port = port
-            source_addr_int = int(ipaddress.ip_address(source_addr))
-            dest_addr = unpacked_outer_header[1]
-            dest_port = unpacked_outer_header[2]
+                packet_priority = priority
+                source_port = port
+                source_addr_int = int(ipaddress.ip_address(source_addr))
+                dest_addr = unpacked_outer_header[1]
+                dest_port = unpacked_outer_header[2]
 
-            outer_header = struct.pack("!BIHIHI", packet_priority, source_addr_int, source_port, dest_addr, dest_port, length_of_packet)
+                outer_header = struct.pack("!BIHIHI", packet_priority, source_addr_int, source_port, dest_addr, dest_port, length_of_packet)
 
-            complete_packet = outer_header + inner_header_with_payload
+                complete_packet = outer_header + inner_header_with_payload
 
-            sock.sendto(complete_packet, (f_hostname, f_port))
+                sock.sendto(complete_packet, (f_hostname, f_port))
 
-            buffer.append(complete_packet)
+                buffer.append(complete_packet)
 
-            print(buffer)
+                ## send the end packet
+                packet_type = "E".encode()
+                end_inner_header_with_payload = struct.pack("!cII", packet_type, i + 1, 0) + "".encode()
 
-            if (len(buffer) == window):
-                print("buffer is full, waiting for ACKs")
+                complete_last_packet = outer_header + end_inner_header_with_payload
+                sock.sendto(complete_last_packet, (f_hostname, f_port))
+                buffer.append(complete_packet)
+
+            else:
+                # send the normal data packet
+                packet_type = "D".encode()
+                length_of_packet = len(chunks_of_file[i])
+                inner_header_with_payload = struct.pack("!cII", packet_type, i, length_of_packet) + chunks_of_file[i].encode()
+
+                packet_priority = priority
+                source_port = port
+                source_addr_int = int(ipaddress.ip_address(source_addr))
+                dest_addr = unpacked_outer_header[1]
+                dest_port = unpacked_outer_header[2]
+
+                outer_header = struct.pack("!BIHIHI", packet_priority, source_addr_int, source_port, dest_addr, dest_port, length_of_packet)
+
+                complete_packet = outer_header + inner_header_with_payload
+
+                sock.sendto(complete_packet, (f_hostname, f_port))
+
+                buffer.append(complete_packet)
 
             # right now not sending window sizes
 
