@@ -86,11 +86,6 @@ def udp():
         unpacked_inner_header = struct.unpack("!cII", inner_header)
 
         window = unpacked_outer_header[5]
-        print(type(window))
-
-        print(unpacked_outer_header)
-        print(unpacked_inner_header)
-        print(payload)
 
         chunks_of_file = chunk_file(payload)
         max_sequence_number = len(chunks_of_file) - 1
@@ -102,6 +97,7 @@ def udp():
 
         buffer = []
         ack_received = {}
+        transmission_count = {}
 
         while True:
             for _ in range(window):
@@ -117,26 +113,32 @@ def udp():
                 complete_packet = outer_header + inner_header_with_payload
                 buffer.append(sequence)
                 ack_received[sequence] = False
+                transmission_count[sequence] = 0
                 sequence += 1
-
                 sock.sendto(complete_packet, (f_hostname, f_port))
 
             start_time = time.time()
             while not all(ack_received[sequence] for sequence in buffer):
-                # TODO: NEED TO LOOK AT DROPPING PACKET AFTER MAX RETRANSMISSIONS !!!
                 current_time = time.time()
+                #print(transmission_count)
 
                 if current_time - start_time > timeout / 1000:
                 # while not all acknowledged
                     for sequence in buffer:
                         if not ack_received[sequence]:
-                            packet = chunks_of_file[sequence].encode()
-                            length_of_packet = len(packet)
-                            packet_type = "D".encode()
-                            inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + packet
-                            outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, length_of_packet)
-                            complete_packet = outer_header + inner_header_with_payload
-                            sock.sendto(complete_packet, (f_hostname, f_port))
+                            if transmission_count[sequence] < 6:
+                                packet = chunks_of_file[sequence].encode()
+                                length_of_packet = len(packet)
+                                packet_type = "D".encode()
+                                inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + packet
+                                outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, length_of_packet)
+                                complete_packet = outer_header + inner_header_with_payload
+                                sock.sendto(complete_packet, (f_hostname, f_port))
+                                transmission_count[sequence] += 1
+                            else:
+                                ack_received[sequence] = True
+                                print("Packet with sequence number {0} is lost".format(sequence))
+                                
                     start_time = time.time()
                 
                 try:
@@ -152,6 +154,8 @@ def udp():
                         # print(ack_received)
                 except socket.timeout:
                     pass
+
+
 
             if sequence > max_sequence_number:
                 # send an end packet
