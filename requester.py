@@ -16,23 +16,6 @@ f_hostname = None
 f_port = None
 window = None
 
-def print_information(packet_type, current_time, sender_addr, sequence_number, length_of_packet, payload):
-    if packet_type == "D":
-        print("DATA Packet:")
-    elif packet_type == "R":
-        print("REQUEST Packet:")
-    elif packet_type == "E":
-        print("END Packet:")
-    print("  recv time:                 %s" % current_time)
-    print("  sender address and port:   {0}:{1}".format(sender_addr[0], sender_addr[1]))
-    print("  sequence:                  %s" % sequence_number)
-    print("  length:                    %s" % length_of_packet)
-    if type(payload) == bytes:
-        print("  payload:                    %s" % payload.decode()[:4])
-    else:
-        print("  payload:                   %s" % "")
-    print()
-
 def read_tracker_file_by_column():
     tracker_file = open("tracker.txt", "r")
     tracker_file_lines = tracker_file.readlines()
@@ -112,7 +95,7 @@ def udp(sorted_and_parsed_tracker):
                         sorted_data = dict(sorted(sender_data[key].items()))
                         
                         for sequence in sorted_data:
-                            with open("text.txt", "a") as f:
+                            with open(file_option, "a") as f:
                                 f.write(sorted_data[sequence])
                         
                     notEnd = False
@@ -126,8 +109,6 @@ def udp(sorted_and_parsed_tracker):
                 ack_inner_header = struct.pack("!cII", packet_type, sequence_number, 0) + "".encode()
                 ack_outer_header = struct.pack("!BIHIHI", 0x01, unpacked_outer_header[3], unpacked_outer_header[4], unpacked_outer_header[1], unpacked_outer_header[2], 0)
                 sock.sendto(ack_outer_header + ack_inner_header, (f_hostname, f_port))
-
-
 
 ### getting options from command line
 def get_options():
