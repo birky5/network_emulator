@@ -51,6 +51,8 @@ def udp(sorted_and_parsed_tracker):
     # sock.bind((UDP_IP, port))
     sock.bind((source_addr, port))
 
+    sender_data = {}
+
     for line in sorted_and_parsed_tracker: # where we get each section of the file
         line = line.split() # splits the line into a list
         priority = 0x01 # 1 byte
@@ -62,6 +64,11 @@ def udp(sorted_and_parsed_tracker):
 
         outer_header = struct.pack("!BIHIHI", priority, source_addr_int, source_port, dest_addr, dest_port, inner_length)
 
+        address = (socket.gethostbyname(line[2]), int(line[3]))
+
+        if address not in sender_data:
+            sender_data[address] = {}
+
         packet_type = "R".encode()
         sequence_number = 0
         packet = file_option.encode()
@@ -70,15 +77,14 @@ def udp(sorted_and_parsed_tracker):
 
         sock.sendto(outer_header + inner_header, (f_hostname, f_port))
 
-    notEnd = True
-    buffer = {}
 
-    dictlist = [dict() for x in range(len(sorted_and_parsed_tracker))]
-    # now need to figure out how to choose if what index in the dict list
-    # to use for each packet
+    notEnd = True
+    end_packet_count = 0
 
     while notEnd: # now we receive all the packets we are waiting on
         full_packet, sender_addr = sock.recvfrom(1024)
+
+        # print(sender_data)
 
         outer_header = full_packet[:17]
         inner_header = full_packet[17:26]
@@ -89,21 +95,29 @@ def udp(sorted_and_parsed_tracker):
 
         packet_type = unpacked_inner_header[0].decode()
 
+        src_ip = str(ipaddress.ip_address(unpacked_outer_header[1]))
+        src_port = unpacked_outer_header[2]
+        source_info = (src_ip, src_port)
+
         dest_ip = str(ipaddress.ip_address(unpacked_outer_header[3]))
         host_ip = socket.gethostbyname(socket.gethostname())
         
         if dest_ip == host_ip:
             if packet_type == "E":
-                sorted_buffer = dict(sorted(buffer.items()))
+                end_packet_count += 1
 
-                for key, value in sorted_buffer.items():
-                    with open("test.txt", "a") as f:
-                        f.write(value)
-
-                buffer.clear()
+                if end_packet_count == len(sorted_and_parsed_tracker):
+                    # if this is the last end packet, then write to the file
+                    for key in sender_data:
+                        sorted_data = dict(sorted(sender_data[key].items()))
+                        
+                        for sequence in sorted_data:
+                            with open("text.txt", "a") as f:
+                                f.write(sorted_data[sequence])
+                        
+                    notEnd = False
             else:
-                buffer[unpacked_inner_header[1]] = payload
-                sorted_buffer = dict(sorted(buffer.items()))
+                sender_data[source_info][unpacked_inner_header[1]] = payload
 
                 # Acknowledge all the packets I am receiving
                 packet_type = "A".encode()
