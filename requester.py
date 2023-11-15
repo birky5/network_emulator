@@ -3,6 +3,7 @@ import struct
 import datetime
 import ipaddress
 from optparse import OptionParser
+import time
 
 # TODO
     # Modify the requester from Lab 1 to:
@@ -35,6 +36,7 @@ def udp(sorted_and_parsed_tracker):
     sock.bind((source_addr, port))
 
     sender_data = {}
+    total_data_packets = {}
 
     for line in sorted_and_parsed_tracker: # where we get each section of the file
         line = line.split() # splits the line into a list
@@ -51,6 +53,7 @@ def udp(sorted_and_parsed_tracker):
 
         if address not in sender_data:
             sender_data[address] = {}
+            total_data_packets[address] = 0
 
         packet_type = "R".encode()
         sequence_number = 0
@@ -63,6 +66,7 @@ def udp(sorted_and_parsed_tracker):
 
     notEnd = True
     end_packet_count = 0
+    start_time = datetime.datetime.now()
 
     while notEnd: # now we receive all the packets we are waiting on
         full_packet, sender_addr = sock.recvfrom(1024)
@@ -88,6 +92,22 @@ def udp(sorted_and_parsed_tracker):
         if dest_ip == host_ip:
             if packet_type == "E":
                 end_packet_count += 1
+                end_time = datetime.datetime.now()
+                elapsed_time = (end_time - start_time)
+                packets_per_second = total_data_packets[source_info] / elapsed_time.total_seconds()
+                # print(total_data_packets[source_info])
+                total_bytes = 0
+                for key in sender_data[source_info]:
+                    total_bytes += len(sender_data[source_info][key])
+                # also need to print out the summary for each sender
+                print("Summary:")
+                print("------------")
+                print("Sender Address                    : {0}:{1}".format(src_ip, src_port))
+                print("Total Unique DATA Packets Received: {0}".format(len(sender_data[source_info])))
+                print("Total DATA Bytes Received         : {0}".format(total_bytes))
+                print("Average Packets per second        : {0}".format(total_data_packets[source_info] / elapsed_time.total_seconds()))
+                print("Duration of Test                  : {0} seconds".format(elapsed_time))
+                print()
 
                 if end_packet_count == len(sorted_and_parsed_tracker):
                     # if this is the last end packet, then write to the file
@@ -101,6 +121,7 @@ def udp(sorted_and_parsed_tracker):
                     notEnd = False
             else:
                 sender_data[source_info][unpacked_inner_header[1]] = payload
+                total_data_packets[source_info] += 1
 
                 # Acknowledge all the packets I am receiving
                 packet_type = "A".encode()
