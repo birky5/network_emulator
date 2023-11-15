@@ -27,7 +27,7 @@ def read_static_forwarding_table():
     #        table_lines.remove(line)
 
     table_lines = [x.strip() for x in table_lines if int(x.split()[1]) == port and socket.gethostbyname(x.split()[0]) == hostname]
-    print(table_lines)
+    #print(table_lines)
 
     # remove all lines that where the "hostname port" pair doesn't have
     # a port that is equal to the port of the emulator we are running
@@ -85,7 +85,7 @@ def emulator(parsed_table):
                 # if a match is found, then queue the packet, otherwise drop the packet and log it
 
                 if (forward_table_hostname == packet_hostname) and (forward_table_port == packet_port):
-                    print("match found, packet queued in queue number: ", unpacked_outer_header[0])
+                    #print("match found, packet queued in queue number: ", unpacked_outer_header[0])
                     if unpacked_outer_header[0] == 1:
                         if high_queue.full():
                             log_packet_loss("High queue is full", source_hostname, source_port, packet_hostname, packet_port, str(datetime.datetime.now()), unpacked_outer_header[0], unpacked_outer_header[5])
@@ -114,7 +114,7 @@ def emulator(parsed_table):
             ready = None # go back out and wait for more packets to arrive
 
         else:
-            print("waiting for something to do...")
+            # print("waiting for something to do...")
 
             if not high_queue.empty():
                 data = high_queue.get()

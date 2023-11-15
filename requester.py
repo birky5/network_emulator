@@ -115,7 +115,7 @@ def udp(sorted_and_parsed_tracker):
                         sorted_data = dict(sorted(sender_data[key].items()))
                         
                         for sequence in sorted_data:
-                            with open("test.txt", "a") as f:
+                            with open(file_option, "a") as f:
                                 f.write(sorted_data[sequence])
                         
                     notEnd = False

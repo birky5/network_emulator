@@ -30,23 +30,6 @@ f_port = None
 priority = None
 timeout = None
 
-def print_information(packet_type, current_time, sender_addr, sequence_number, length_of_packet, payload):
-    if packet_type == "D":
-        print("DATA Packet:")
-    elif packet_type == "R":
-        print("REQUEST Packet:")
-    elif packet_type == "E":
-        print("END Packet:")
-    print("  send time:                             %s" % current_time)
-    print("  requester address and port:            {0}:{1}".format(sender_addr[0], sender_addr[1]))
-    print("  sequence number:                       %s" % sequence_number)
-    print("  length:                                %s" % length_of_packet)
-    if type(payload) == bytes:
-        print("  payload:                               %s" % payload.decode()[:4])
-    else:
-        print("  payload:                               %s" % "")
-    print()
-
 def chunk_file(file_name):
     # chunk the file
     chunks = []
@@ -133,14 +116,14 @@ def udp():
                         complete_packet = outer_header + inner_header_with_payload
                         ack_received[sequence] = False
                         transmission_count[sequence] = 0
-                        last_send_ts[sequence] = time.time()
+                        last_send_ts[sequence] = datetime.datetime.now()
                         sequence += 1
                         sock.sendto(complete_packet, (f_hostname, f_port))
                         transmissions += 1
 
-                start_time = time.time()
+                start_time = datetime.datetime.now()
                 while not all(ack_received.values()):
-                    current_time = time.time()
+                    current_time = datetime.datetime.now()
                     # print(current_time - start_time > timeout / 1000)
                     if current_time - start_time > timeout / 1000:
                         for sequence in ack_received:
@@ -148,13 +131,13 @@ def udp():
                                 if transmission_count[sequence] == 6:
                                     ack_received[sequence] = True
                                     # just set it equal to true so we don't have to send it again
-                                    print("ERROR: Gave up on packet %s" % sequence)
+                                    print("ERROR: Gave up on packet %s, >5 retransmissions." % sequence)
                                 else:
-                                    time_now = time.time()
-                                    if time_now - last_send_ts[sequence] > (1 / rate):
+                                    time_since_last_send = current_time - last_send_ts[sequence]
+                                    if time_since_last_send.total_seconds() >= (1 / rate):
                                         # we need to send the packet immediately
                                         transmission_count[sequence] += 1
-                                        last_send_ts[sequence] = time.time()
+                                        last_send_ts[sequence] = datetime.datetime.now()
                                         packet = chunks_of_file[sequence].encode()
                                         length_of_packet = len(packet)
                                         packet_type = "D".encode()
@@ -165,10 +148,12 @@ def udp():
                                         transmissions += 1
                                         retransmissions += 1
                                     else:
-                                        time.sleep((1 / rate) - time_now - last_send_ts[sequence])
+                                        time_to_wait = (1 / rate) - time_since_last_send.total_seconds()
+                                        if time_to_wait > 0:
+                                            time.sleep(time_to_wait)
                                         # after we sleep to keep with the rate resend the packet
                                         transmission_count[sequence] += 1
-                                        last_send_ts[sequence] = time.time()
+                                        last_send_ts[sequence] = datetime.datetime.now()
                                         packet = chunks_of_file[sequence].encode()
                                         length_of_packet = len(packet)
                                         packet_type = "D".encode()
@@ -178,7 +163,7 @@ def udp():
                                         sock.sendto(complete_packet, (f_hostname, f_port))
                                         transmissions += 1
                                         retransmissions += 1
-                        start_time = time.time()
+                        start_time = datetime.datetime.now()
 
                     try:
                         sock.settimeout(0.1)
