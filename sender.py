@@ -88,74 +88,90 @@ def udp():
         window = unpacked_outer_header[5]
 
         chunks_of_file = chunk_file(payload)
-        max_sequence_number = len(chunks_of_file) - 1
+        max_sequence_number = len(chunks_of_file)
         sequence = 0
 
         src_addr_int = int(ipaddress.ip_address(source_addr))
         dest_addr = unpacked_outer_header[1]
         dest_port = unpacked_outer_header[2]
 
-        buffer = []
         ack_received = {}
         transmission_count = {}
+        last_send_ts = {}
 
         while True:
+            transmission_count.clear()
+            ack_received.clear()
+            
             for _ in range(window):
-                if sequence > max_sequence_number:
+                if sequence >= max_sequence_number:
+                    print(transmission_count)
                     break
-                time.sleep(1 / rate)
-                packet = chunks_of_file[sequence].encode()
-                length_of_packet = len(packet)
-                packet_type = "D".encode()
-                inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + packet
-                outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, length_of_packet)
+                else:
+                    time.sleep(1 / rate)
+                    packet = chunks_of_file[sequence].encode()
+                    length_of_packet = len(packet)
+                    packet_type = "D".encode()
+                    inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + packet
+                    outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, length_of_packet)
 
-                complete_packet = outer_header + inner_header_with_payload
-                buffer.append(sequence)
-                ack_received[sequence] = False
-                transmission_count[sequence] = 0
-                sequence += 1
-                sock.sendto(complete_packet, (f_hostname, f_port))
+                    complete_packet = outer_header + inner_header_with_payload
+                    ack_received[sequence] = False
+                    transmission_count[sequence] = 0
+                    last_send_ts[sequence] = time.time()
+                    sequence += 1
+                    sock.sendto(complete_packet, (f_hostname, f_port))
 
             start_time = time.time()
-            while not all(ack_received[sequence] for sequence in buffer):
+            while not all(ack_received.values()):
+                # print(ack_received)
                 current_time = time.time()
-                #print(transmission_count)
-
                 if current_time - start_time > timeout / 1000:
-                # while not all acknowledged
-                    for sequence in buffer:
+                    for sequence in ack_received:
                         if not ack_received[sequence]:
-                            if transmission_count[sequence] < 6:
-                                packet = chunks_of_file[sequence].encode()
-                                length_of_packet = len(packet)
-                                packet_type = "D".encode()
-                                inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + packet
-                                outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, length_of_packet)
-                                complete_packet = outer_header + inner_header_with_payload
-                                sock.sendto(complete_packet, (f_hostname, f_port))
-                                transmission_count[sequence] += 1
+                            if transmission_count[sequence] >= 6:
+                                ack_received.pop(sequence)
+                                transmission_count.pop(sequence)
+                                print("ERROR: Gave up on packet %s" % sequence)
+                                break
                             else:
-                                ack_received[sequence] = True
-                                print("Packet with sequence number {0} is lost".format(sequence))
-                                
+                                time_now = time.time()
+                                if time_now - last_send_ts[sequence] > (1 / rate):
+                                    # send immediately
+                                    transmission_count[sequence] += 1
+                                    last_send_ts[sequence] = time.time()
+                                    packet = chunks_of_file[sequence].encode()
+                                    length_of_packet = len(packet)
+                                    packet_type = "D".encode()
+                                    inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + packet
+                                    outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, length_of_packet)
+                                    complete_packet = outer_header + inner_header_with_payload
+                                    sock.sendto(complete_packet, (f_hostname, f_port))
+                                else:
+                                    time.sleep((1 / rate) - (time_now - last_send_ts[sequence]))
+                                    # then send
+                                    transmission_count[sequence] += 1
+                                    last_send_ts[sequence] = time.time()
+                                    packet = chunks_of_file[sequence].encode()
+                                    length_of_packet = len(packet)
+                                    packet_type = "D".encode()
+                                    inner_header_with_payload = struct.pack("!cII", packet_type, sequence, length_of_packet) + packet
+                                    outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, length_of_packet)
+                                    complete_packet = outer_header + inner_header_with_payload
+                                    sock.sendto(complete_packet, (f_hostname, f_port))
                     start_time = time.time()
-                
+
                 try:
-                    sock.settimeout(0.1)
+                    sock.settimeout(1.0)
                     ack_packet, sender_addr = sock.recvfrom(1024)
 
                     ack_inner_header = ack_packet[17:26]
                     unpacked_ack_inner_header = struct.unpack("!cII", ack_inner_header)
-                    unpacked_sequence_number = unpacked_ack_inner_header[1]
+                    ack_sequence_number = unpacked_ack_inner_header[1]
 
-                    if unpacked_sequence_number in buffer:
-                        ack_received[unpacked_sequence_number] = True
-                        # print(ack_received)
+                    ack_received[ack_sequence_number] = True
                 except socket.timeout:
                     pass
-
-
 
             if sequence > max_sequence_number:
                 # send an end packet
@@ -164,10 +180,8 @@ def udp():
                 outer_header = struct.pack("!BIHIHI", priority, src_addr_int, port, dest_addr, dest_port, 0)
                 complete_packet = outer_header + end_inner_header_with_payload
                 sock.sendto(complete_packet, (f_hostname, f_port))
+                notEnd = False
                 break
-        notEnd = False
-
-    # right now we are just receiving the packets, nothing else currently.
 
 ### getting options from command line
 def get_options():
